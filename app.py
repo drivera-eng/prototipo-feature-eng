@@ -142,10 +142,12 @@ if uploaded_files:
             st.pyplot(fig)
 
     st.sidebar.markdown("---")
-    if st.sidebar.button("🗑️ Limpiar Todo y Reiniciar"):
+
+if st.sidebar.button("🗑️ Limpiar Todo y Reiniciar"):
         for key in st.session_state.keys():
             del st.session_state[key]
-        st.experimental_rerun()
+        st.rerun()
+
 else:
     st.info("Sube un archivo CSV en el panel izquierdo para iniciar.")
 

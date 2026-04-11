@@ -156,3 +156,41 @@ if uploaded_files:
 
 else:
     st.info("Sube un archivo CSV en el panel izquierdo para iniciar.")
+
+import numpy as np
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.linear_model import LinearRegression
+
+st.header("4. Laboratorio Interactivo: Complejidad del Modelo")
+st.markdown("Mueve el control deslizante para cambiar el grado del polinomio. Observa cómo un modelo muy simple ignora la tendencia (Subajuste) y un modelo muy complejo captura el ruido (Sobreajuste).")
+
+# 1. Generar datos simulados no lineales (Ej: desgaste de turbina vs tiempo)
+np.random.seed(42)
+X_sim = np.sort(np.random.rand(50, 1) * 10, axis=0)
+# Creamos una curva con un poco de ruido (distorsión)
+y_sim = np.sin(X_sim).ravel() + np.random.randn(50) * 0.4
+
+# 2. El control interactivo (Slider)
+grado = st.slider("⚙️ Grado del Polinomio (Complejidad)", min_value=1, max_value=15, value=1)
+
+# 3. Matemática: Ajuste del modelo según el slider
+poly_features = PolynomialFeatures(degree=grado, include_bias=False)
+X_poly = poly_features.fit_transform(X_sim)
+lin_reg = LinearRegression()
+lin_reg.fit(X_poly, y_sim)
+
+# Generar puntos de línea suave para dibujar
+X_new = np.linspace(0, 10, 100).reshape(100, 1)
+X_new_poly = poly_features.transform(X_new)
+y_new = lin_reg.predict(X_new_poly)
+
+# 4. Renderizar la gráfica interactiva
+fig, ax = plt.subplots(figsize=(10, 5))
+sns.scatterplot(x=X_sim.ravel(), y=y_sim, color="black", label="Datos Crudos (Ruido)", s=40, ax=ax)
+ax.plot(X_new, y_new, color="red", linewidth=2, label=f"Modelo Predictivo (Grado {grado})")
+
+# Ajustes visuales
+ax.set_ylim(-2, 2)
+ax.set_title("Efecto del Grado Polinómico en la Regresión")
+ax.legend()
+st.pyplot(fig)

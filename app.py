@@ -4,13 +4,15 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import phik
 from sklearn.decomposition import PCA
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.linear_model import LinearRegression
 import umap
 import numpy as np
 
 st.set_page_config(page_title="Feature Engineering & EDA Dinámico", layout="wide")
 
 st.title("Plataforma de Feature Engineering y EDA")
-st.markdown("Prototipo de análisis universal para cualquier conjunto de datos.")
+st.markdown("Prototipo de análisis universal con protección de memoria y laboratorio interactivo.")
 
 # --- INICIALIZACIÓN DE LA MEMORIA ---
 if 'show_timeseries' not in st.session_state:
@@ -33,25 +35,27 @@ uploaded_files = st.sidebar.file_uploader("Sube tus archivos CSV", type=["csv"],
 if uploaded_files:
     dfs = [pd.read_csv(file) for file in uploaded_files]
     df_raw = pd.concat(dfs, ignore_index=True)
-    
-    # IMPORTANTE: Filtrar solo columnas numéricas para evitar errores matemáticos con texto
     df_numeric = df_raw.select_dtypes(include=[np.number]).dropna()
+    
+    # --- VÁLVULA DE SEGURIDAD (ANTI-CRASH) ---
+    MAX_ROWS = 5000
+    if len(df_numeric) > MAX_ROWS:
+        st.warning(f"⚠️ Dataset gigante detectado ({len(df_numeric)} filas). Para garantizar la fluidez y no saturar el servidor, se ha extraído una muestra representativa de {MAX_ROWS} filas para el análisis matemático.")
+        df_numeric = df_numeric.sample(n=MAX_ROWS, random_state=42).reset_index(drop=True)
     
     if st.session_state.df_with_features is not None:
         df = st.session_state.df_with_features
     else:
         df = df_numeric
 
-    st.write(f"### Datos Cargados (Total filas: {df.shape[0]}, Columnas Numéricas: {df.shape[1]})")
+    st.write(f"### Datos Activos (Filas en memoria: {df.shape[0]}, Columnas: {df.shape[1]})")
     st.dataframe(df.head())
 
     st.header("2. Análisis Exploratorio de Datos (EDA)")
     
-    # --- BOTONES DE EDA ---
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        # Selección dinámica de columnas para la serie de tiempo
         st.markdown("**Serie de Tiempo**")
         selected_cols = st.multiselect("Elige las variables a graficar:", df_numeric.columns.tolist(), default=df_numeric.columns.tolist()[:2])
         if st.button("Generar Serie de Tiempo"):
@@ -68,42 +72,30 @@ if uploaded_files:
         if st.button("Generar Correlación Phi_K"):
             st.session_state.show_correlation = True
 
-    # --- RENDERIZADO DE GRÁFICAS DE EDA ---
-    
-    # Serie de Tiempo Dinámica
+    # --- RENDERIZADO EDA ---
     if st.session_state.show_timeseries and 'ts_cols' in st.session_state:
         if len(st.session_state.ts_cols) > 0:
             with st.expander("📈 Series de Tiempo", expanded=True):
                 with st.spinner("Graficando..."):
                     fig, axes = plt.subplots(len(st.session_state.ts_cols), 1, figsize=(10, 3 * len(st.session_state.ts_cols)))
-                    # Ajustar si es solo una gráfica o múltiples
-                    if len(st.session_state.ts_cols) == 1:
-                        axes = [axes]
-                        
+                    if len(st.session_state.ts_cols) == 1: axes = [axes]
                     for ax, col in zip(axes, st.session_state.ts_cols):
                         ax.scatter(df.index, df[col], s=2, color='black')
                         ax.set_ylabel(col)
-                    
                     axes[-1].set_xlabel('Index / Sample')
                     plt.tight_layout()
                     st.pyplot(fig)
-        else:
-            st.warning("Selecciona al menos una variable para graficar.")
 
-    # Pairplot
     if st.session_state.show_pairplot:
         with st.expander("📊 Pairplot con Densidad de Kernel (KDE)", expanded=True):
-            with st.spinner("Generando Pairplot (usando muestra aleatoria para velocidad)..."):
-                # Limitar variables si hay demasiadas para que no colapse visualmente (max 10)
+            with st.spinner("Generando Pairplot..."):
                 cols_to_plot = df_numeric.columns[:10]
-                df_sample = df[cols_to_plot].sample(n=min(1000, len(df)), random_state=42)
-                fig = sns.pairplot(df_sample, diag_kind="kde", markers=".", height=1.5)
+                fig = sns.pairplot(df[cols_to_plot], diag_kind="kde", markers=".", height=1.5)
                 st.pyplot(fig)
 
-    # Correlación
     if st.session_state.show_correlation:
         with st.expander("🔥 Mapa de Correlación Phi_K", expanded=True):
-            with st.spinner("Calculando..."):
+            with st.spinner("Calculando dependencias no lineales..."):
                 phik_matrix = df_numeric.phik_matrix()
                 fig, ax = plt.subplots(figsize=(12, 10))
                 sns.heatmap(phik_matrix, annot=True, cmap="coolwarm", fmt=".2f", annot_kws={"size": 8})
@@ -127,7 +119,7 @@ if uploaded_files:
                 for i in range(n_comp): df_numeric[f'UMAP_{i+1}'] = umap_feat[:, i]
                 
                 st.session_state.df_with_features = df_numeric
-                st.success(f"Características extraídas con éxito.")
+                st.success("Características extraídas con éxito.")
                 st.dataframe(df_numeric.head())
 
     with col2_rd:
@@ -153,44 +145,35 @@ if uploaded_files:
         for key in st.session_state.keys():
             del st.session_state[key]
         st.experimental_rerun()
-
 else:
     st.info("Sube un archivo CSV en el panel izquierdo para iniciar.")
 
-import numpy as np
-from sklearn.preprocessing import PolynomialFeatures
-from sklearn.linear_model import LinearRegression
-
+st.markdown("---")
+# ==========================================
+# 4. LABORATORIO INTERACTIVO (INDEPENDIENTE)
+# ==========================================
 st.header("4. Laboratorio Interactivo: Complejidad del Modelo")
-st.markdown("Mueve el control deslizante para cambiar el grado del polinomio. Observa cómo un modelo muy simple ignora la tendencia (Subajuste) y un modelo muy complejo captura el ruido (Sobreajuste).")
+st.markdown("Este módulo funciona independientemente de los datos cargados. Mueve el control deslizante para cambiar el grado del polinomio. Observa cómo un modelo muy simple ignora la tendencia (Subajuste) y un modelo excesivamente complejo intenta capturar todo el ruido (Sobreajuste).")
 
-# 1. Generar datos simulados no lineales (Ej: desgaste de turbina vs tiempo)
 np.random.seed(42)
 X_sim = np.sort(np.random.rand(50, 1) * 10, axis=0)
-# Creamos una curva con un poco de ruido (distorsión)
 y_sim = np.sin(X_sim).ravel() + np.random.randn(50) * 0.4
 
-# 2. El control interactivo (Slider)
-grado = st.slider("⚙️ Grado del Polinomio (Complejidad)", min_value=1, max_value=15, value=1)
+grado = st.slider("⚙️ Grado del Polinomio (Ajusta la barra)", min_value=1, max_value=15, value=1)
 
-# 3. Matemática: Ajuste del modelo según el slider
 poly_features = PolynomialFeatures(degree=grado, include_bias=False)
 X_poly = poly_features.fit_transform(X_sim)
 lin_reg = LinearRegression()
 lin_reg.fit(X_poly, y_sim)
 
-# Generar puntos de línea suave para dibujar
 X_new = np.linspace(0, 10, 100).reshape(100, 1)
 X_new_poly = poly_features.transform(X_new)
 y_new = lin_reg.predict(X_new_poly)
 
-# 4. Renderizar la gráfica interactiva
-fig, ax = plt.subplots(figsize=(10, 5))
-sns.scatterplot(x=X_sim.ravel(), y=y_sim, color="black", label="Datos Crudos (Ruido)", s=40, ax=ax)
-ax.plot(X_new, y_new, color="red", linewidth=2, label=f"Modelo Predictivo (Grado {grado})")
-
-# Ajustes visuales
-ax.set_ylim(-2, 2)
-ax.set_title("Efecto del Grado Polinómico en la Regresión")
-ax.legend()
-st.pyplot(fig)
+fig_lab, ax_lab = plt.subplots(figsize=(10, 4))
+sns.scatterplot(x=X_sim.ravel(), y=y_sim, color="black", label="Datos Crudos (Ruido)", s=40, ax=ax_lab)
+ax_lab.plot(X_new, y_new, color="red", linewidth=2, label=f"Modelo Predictivo (Grado {grado})")
+ax_lab.set_ylim(-2, 2)
+ax_lab.set_title(f"Impacto del Grado Polinómico (Complejidad: {grado})")
+ax_lab.legend()
+st.pyplot(fig_lab)

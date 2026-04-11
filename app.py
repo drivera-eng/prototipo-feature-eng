@@ -1,3 +1,4 @@
+from scipy.stats import norm
 import streamlit as st
 import pandas as pd
 import seaborn as sns
@@ -153,58 +154,86 @@ st.markdown("---")
 # ==========================================
 # 4. LABORATORIO INTERACTIVO (CON TUS DATOS)
 # ==========================================
-st.header("4. Laboratorio Interactivo: Ajuste de Modelos Predictivos")
-st.markdown("Selecciona dos variables de tu conjunto de datos. Mueve el control deslizante para cambiar la complejidad (grado del polinomio) y observa cómo el algoritmo intenta aprender la tendencia real versus memorizar el ruido (sobreajuste).")
+st.header("4. Laboratorio Interactivo: Modelos y Distribuciones")
+st.markdown("Explora el comportamiento matemático de tus datos en tiempo real.")
 
 if uploaded_files and not df_numeric.empty:
-    # 1. Selectores para elegir qué variables cruzar
-    col_x, col_y = st.columns(2)
-    with col_x:
-        var_x = st.selectbox("Variable Independiente (Eje X - Causa):", df_numeric.columns.tolist(), index=0)
-    with col_y:
-        # Por defecto selecciona una variable diferente para el eje Y si es posible
-        idx_y = 1 if len(df_numeric.columns) > 1 else 0
-        var_y = st.selectbox("Variable Dependiente (Eje Y - Efecto a predecir):", df_numeric.columns.tolist(), index=idx_y)
+    # Creamos dos pestañas para organizar las herramientas interactivas
+    tab1, tab2 = st.tabs(["📈 Regresión Polinómica", "🔔 Distribución de Gauss (Normalidad)"])
+    
+    # --- PESTAÑA 1: LA REGRESIÓN ---
+    with tab1:
+        st.markdown("### Ajuste de Modelos Predictivos")
+        col_x, col_y = st.columns(2)
+        with col_x:
+            var_x = st.selectbox("Variable Independiente (Eje X):", df_numeric.columns.tolist(), index=0, key="x_reg")
+        with col_y:
+            idx_y = 1 if len(df_numeric.columns) > 1 else 0
+            var_y = st.selectbox("Variable Dependiente (Eje Y):", df_numeric.columns.tolist(), index=idx_y, key="y_reg")
 
-    # 2. Control deslizante interactivo
-    grado = st.slider("⚙️ Nivel de Complejidad del Modelo (Grado Polinómico)", min_value=1, max_value=15, value=1)
+        grado = st.slider("⚙️ Nivel de Complejidad (Grado Polinómico)", min_value=1, max_value=15, value=1)
 
-    with st.spinner("Calculando regresión en tiempo real..."):
-        # TRUCO DE RENDIMIENTO: Tomamos una muestra aleatoria de 500 puntos como máximo.
-        # Si graficamos millones de puntos, la barra se trabará y no será interactiva en la web.
-        df_plot = df_numeric.sample(n=min(500, len(df_numeric)), random_state=42).sort_values(by=var_x)
+        with st.spinner("Calculando regresión en tiempo real..."):
+            df_plot = df_numeric.sample(n=min(500, len(df_numeric)), random_state=42).sort_values(by=var_x)
+            X_real = df_plot[[var_x]].values
+            y_real = df_plot[var_y].values
+
+            poly_features = PolynomialFeatures(degree=grado, include_bias=False)
+            X_poly = poly_features.fit_transform(X_real)
+            lin_reg = LinearRegression()
+            lin_reg.fit(X_poly, y_real)
+
+            X_seq = np.linspace(X_real.min(), X_real.max(), 300).reshape(-1, 1)
+            X_seq_poly = poly_features.transform(X_seq)
+            y_seq = lin_reg.predict(X_seq_poly)
+
+            fig_lab, ax_lab = plt.subplots(figsize=(10, 5))
+            sns.scatterplot(x=X_real.ravel(), y=y_real, color="black", alpha=0.6, label=f"Datos Reales", s=40, ax=ax_lab)
+            ax_lab.plot(X_seq, y_seq, color="red", linewidth=2.5, label=f"Modelo Predictivo (Grado {grado})")
+            
+            ax_lab.set_xlabel(var_x)
+            ax_lab.set_ylabel(var_y)
+            ax_lab.set_title(f"Curva de Regresión: {var_y} vs {var_x}")
+            
+            y_margin = (y_real.max() - y_real.min()) * 0.5
+            ax_lab.set_ylim(y_real.min() - y_margin, y_real.max() + y_margin)
+            ax_lab.legend()
+            st.pyplot(fig_lab)
+
+    # --- PESTAÑA 2: DIAGRAMA DE GAUSS ---
+    with tab2:
+        st.markdown("### Análisis de Frecuencias y Campana de Gauss")
+        st.markdown("Selecciona una variable para visualizar cómo se distribuyen sus valores frente a una curva Normal (Gaussiana) teórica. Útil para verificar asimetrías o sesgos en la medición.")
         
-        X_real = df_plot[[var_x]].values
-        y_real = df_plot[var_y].values
-
-        # 3. Matemática: Ajuste del modelo a los datos del cliente
-        poly_features = PolynomialFeatures(degree=grado, include_bias=False)
-        X_poly = poly_features.fit_transform(X_real)
-        lin_reg = LinearRegression()
-        lin_reg.fit(X_poly, y_real)
-
-        # Generar una línea suave continua para dibujar la curva roja
-        X_seq = np.linspace(X_real.min(), X_real.max(), 300).reshape(-1, 1)
-        X_seq_poly = poly_features.transform(X_seq)
-        y_seq = lin_reg.predict(X_seq_poly)
-
-        # 4. Renderizar la gráfica interactiva
-        fig_lab, ax_lab = plt.subplots(figsize=(10, 5))
-        # Puntos reales del cliente
-        sns.scatterplot(x=X_real.ravel(), y=y_real, color="black", alpha=0.6, label=f"Datos Reales ({var_y} vs {var_x})", s=40, ax=ax_lab)
-        # Curva de predicción
-        ax_lab.plot(X_seq, y_seq, color="red", linewidth=2.5, label=f"Modelo Regresion (Grado {grado})")
+        var_gauss = st.selectbox("Variable a evaluar:", df_numeric.columns.tolist(), index=0, key="var_gauss")
+        bins = st.slider("⚙️ Número de intervalos (Resolución del Histograma)", min_value=10, max_value=100, value=30)
         
-        # Ajustes visuales
-        ax_lab.set_xlabel(var_x)
-        ax_lab.set_ylabel(var_y)
-        ax_lab.set_title(f"Curva de Regresión Dinámica: {var_y} en función de {var_x}")
-        
-        # Límite en Y para que el gráfico no salte locamente con polinomios extremos
-        y_margin = (y_real.max() - y_real.min()) * 0.5
-        ax_lab.set_ylim(y_real.min() - y_margin, y_real.max() + y_margin)
-        
-        ax_lab.legend()
-        st.pyplot(fig_lab)
+        with st.spinner("Generando distribución estadística..."):
+            # Extraer los datos reales y limpiar valores nulos para no dañar la matemática
+            data_gauss = df_numeric[var_gauss].dropna()
+            
+            # Calcular Media y Desviación Estándar reales
+            mu, std = norm.fit(data_gauss)
+            
+            fig_gauss, ax_gauss = plt.subplots(figsize=(10, 5))
+            
+            # Dibujar el Histograma de los datos
+            sns.histplot(data_gauss, bins=bins, stat="density", color="skyblue", alpha=0.6, label="Frecuencia Real", ax=ax_gauss)
+            
+            # Dibujar la campana de Gauss teórica
+            xmin, xmax = ax_gauss.get_xlim()
+            x_curve = np.linspace(xmin, xmax, 200)
+            p = norm.pdf(x_curve, mu, std)
+            
+            # Formato de la ecuación usando LaTeX nativo de Matplotlib
+            ax_gauss.plot(x_curve, p, 'k', linewidth=2.5, color='darkorange', label=f"Curva de Gauss (Normal)\n$\mu={mu:.2f},\ \sigma={std:.2f}$")
+            
+            ax_gauss.set_title(f"Comportamiento Estadístico de: {var_gauss}")
+            ax_gauss.set_xlabel(var_gauss)
+            ax_gauss.set_ylabel("Densidad de Probabilidad")
+            ax_gauss.legend()
+            
+            st.pyplot(fig_gauss)
+
 else:
     st.info("Sube un archivo en el panel izquierdo para activar el laboratorio predictivo con tus propios datos.")

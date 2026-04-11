@@ -1,0 +1,9 @@
+streamlit
+pandas
+seaborn
+matplotlib
+phik
+scikit-learn
+umap-learn
+phate
+FRUFS

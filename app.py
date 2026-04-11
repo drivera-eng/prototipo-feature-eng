@@ -149,31 +149,62 @@ else:
     st.info("Sube un archivo CSV en el panel izquierdo para iniciar.")
 
 st.markdown("---")
+
 # ==========================================
-# 4. LABORATORIO INTERACTIVO (INDEPENDIENTE)
+# 4. LABORATORIO INTERACTIVO (CON TUS DATOS)
 # ==========================================
-st.header("4. Laboratorio Interactivo: Complejidad del Modelo")
-st.markdown("Este módulo funciona independientemente de los datos cargados. Mueve el control deslizante para cambiar el grado del polinomio. Observa cómo un modelo muy simple ignora la tendencia (Subajuste) y un modelo excesivamente complejo intenta capturar todo el ruido (Sobreajuste).")
+st.header("4. Laboratorio Interactivo: Ajuste de Modelos Predictivos")
+st.markdown("Selecciona dos variables de tu conjunto de datos. Mueve el control deslizante para cambiar la complejidad (grado del polinomio) y observa cómo el algoritmo intenta aprender la tendencia real versus memorizar el ruido (sobreajuste).")
 
-np.random.seed(42)
-X_sim = np.sort(np.random.rand(50, 1) * 10, axis=0)
-y_sim = np.sin(X_sim).ravel() + np.random.randn(50) * 0.4
+if uploaded_files and not df_numeric.empty:
+    # 1. Selectores para elegir qué variables cruzar
+    col_x, col_y = st.columns(2)
+    with col_x:
+        var_x = st.selectbox("Variable Independiente (Eje X - Causa):", df_numeric.columns.tolist(), index=0)
+    with col_y:
+        # Por defecto selecciona una variable diferente para el eje Y si es posible
+        idx_y = 1 if len(df_numeric.columns) > 1 else 0
+        var_y = st.selectbox("Variable Dependiente (Eje Y - Efecto a predecir):", df_numeric.columns.tolist(), index=idx_y)
 
-grado = st.slider("⚙️ Grado del Polinomio (Ajusta la barra)", min_value=1, max_value=15, value=1)
+    # 2. Control deslizante interactivo
+    grado = st.slider("⚙️ Nivel de Complejidad del Modelo (Grado Polinómico)", min_value=1, max_value=15, value=1)
 
-poly_features = PolynomialFeatures(degree=grado, include_bias=False)
-X_poly = poly_features.fit_transform(X_sim)
-lin_reg = LinearRegression()
-lin_reg.fit(X_poly, y_sim)
+    with st.spinner("Calculando regresión en tiempo real..."):
+        # TRUCO DE RENDIMIENTO: Tomamos una muestra aleatoria de 500 puntos como máximo.
+        # Si graficamos millones de puntos, la barra se trabará y no será interactiva en la web.
+        df_plot = df_numeric.sample(n=min(500, len(df_numeric)), random_state=42).sort_values(by=var_x)
+        
+        X_real = df_plot[[var_x]].values
+        y_real = df_plot[var_y].values
 
-X_new = np.linspace(0, 10, 100).reshape(100, 1)
-X_new_poly = poly_features.transform(X_new)
-y_new = lin_reg.predict(X_new_poly)
+        # 3. Matemática: Ajuste del modelo a los datos del cliente
+        poly_features = PolynomialFeatures(degree=grado, include_bias=False)
+        X_poly = poly_features.fit_transform(X_real)
+        lin_reg = LinearRegression()
+        lin_reg.fit(X_poly, y_real)
 
-fig_lab, ax_lab = plt.subplots(figsize=(10, 4))
-sns.scatterplot(x=X_sim.ravel(), y=y_sim, color="black", label="Datos Crudos (Ruido)", s=40, ax=ax_lab)
-ax_lab.plot(X_new, y_new, color="red", linewidth=2, label=f"Modelo Predictivo (Grado {grado})")
-ax_lab.set_ylim(-2, 2)
-ax_lab.set_title(f"Impacto del Grado Polinómico (Complejidad: {grado})")
-ax_lab.legend()
-st.pyplot(fig_lab)
+        # Generar una línea suave continua para dibujar la curva roja
+        X_seq = np.linspace(X_real.min(), X_real.max(), 300).reshape(-1, 1)
+        X_seq_poly = poly_features.transform(X_seq)
+        y_seq = lin_reg.predict(X_seq_poly)
+
+        # 4. Renderizar la gráfica interactiva
+        fig_lab, ax_lab = plt.subplots(figsize=(10, 5))
+        # Puntos reales del cliente
+        sns.scatterplot(x=X_real.ravel(), y=y_real, color="black", alpha=0.6, label=f"Datos Reales ({var_y} vs {var_x})", s=40, ax=ax_lab)
+        # Curva de predicción
+        ax_lab.plot(X_seq, y_seq, color="red", linewidth=2.5, label=f"Modelo Predictivo (Grado {grado})")
+        
+        # Ajustes visuales
+        ax_lab.set_xlabel(var_x)
+        ax_lab.set_ylabel(var_y)
+        ax_lab.set_title(f"Curva de Regresión Dinámica: {var_y} en función de {var_x}")
+        
+        # Límite en Y para que el gráfico no salte locamente con polinomios extremos
+        y_margin = (y_real.max() - y_real.min()) * 0.5
+        ax_lab.set_ylim(y_real.min() - y_margin, y_real.max() + y_margin)
+        
+        ax_lab.legend()
+        st.pyplot(fig_lab)
+else:
+    st.info("Sube un archivo en el panel izquierdo para activar el laboratorio predictivo con tus propios datos.")

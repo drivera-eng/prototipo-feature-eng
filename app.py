@@ -193,7 +193,7 @@ if uploaded_files and not df_numeric.empty:
         # Puntos reales del cliente
         sns.scatterplot(x=X_real.ravel(), y=y_real, color="black", alpha=0.6, label=f"Datos Reales ({var_y} vs {var_x})", s=40, ax=ax_lab)
         # Curva de predicción
-        ax_lab.plot(X_seq, y_seq, color="red", linewidth=2.5, label=f"Modelo Predictivo (Grado {grado})")
+        ax_lab.plot(X_seq, y_seq, color="red", linewidth=2.5, label=f"Modelo Regresion (Grado {grado})")
         
         # Ajustes visuales
         ax_lab.set_xlabel(var_x)

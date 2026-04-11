@@ -191,7 +191,7 @@ if uploaded_files and not df_numeric.empty:
 
             fig_lab, ax_lab = plt.subplots(figsize=(10, 5))
             sns.scatterplot(x=X_real.ravel(), y=y_real, color="black", alpha=0.6, label=f"Datos Reales", s=40, ax=ax_lab)
-            ax_lab.plot(X_seq, y_seq, color="red", linewidth=2.5, label=f"Modelo Predictivo (Grado {grado})")
+            ax_lab.plot(X_seq, y_seq, color="red", linewidth=2.5, label=f"Modelo Estadístico (Grado {grado})")
             
             ax_lab.set_xlabel(var_x)
             ax_lab.set_ylabel(var_y)
@@ -238,4 +238,4 @@ if uploaded_files and not df_numeric.empty:
             st.pyplot(fig_gauss)
 
 else:
-    st.info("Sube un archivo en el panel izquierdo para activar el laboratorio predictivo con tus propios datos.")
+    st.info("Sube un archivo en el panel izquierdo para activar el laboratorio estadístico con tus propios datos.")
